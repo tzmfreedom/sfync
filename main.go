@@ -10,6 +10,7 @@ import (
 
 var username string
 var password string
+var endpoint = "login.salesforce.com"
 var objects = []*Object{}
 
 type Object struct {
@@ -22,7 +23,40 @@ type Property struct {
 	Name string
 }
 
+type Diff struct {
+	NewObjects    []*Object
+	DeleteObjects []*Object
+	NewColumns    map[string][]*Property
+	UpdateColumns map[string][]*Property
+	DeleteColumns map[string][]*Property
+}
+
 func main() {
+	loadFile()
+	schema, err := getSalesforceSchema()
+	if err != nil {
+		panic(err)
+	}
+	diff, err := getDiff(schema, objects)
+	if err != nil {
+		panic(err)
+	}
+	apply(diff)
+}
+
+func getSalesforceSchema() ([]*Object, error) {
+	return nil, nil
+}
+
+func apply(diff *Diff) error {
+	return nil
+}
+
+func getDiff(schema []*Object, objects []*Object) (*Diff, error) {
+	return nil, nil
+}
+
+func loadFile() {
 	mrb := mruby.NewMrb()
 	defer mrb.Close()
 
@@ -41,9 +75,6 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
-	pp.Println(username)
-	pp.Println(password)
-	pp.Println(objects)
 }
 
 func defineDSL(mrb *mruby.Mrb) {
@@ -60,6 +91,10 @@ func defineDSL(mrb *mruby.Mrb) {
 	}, mruby.ArgsReq(1))
 	kernel.DefineMethod("password", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
 		password = m.GetArgs()[0].String()
+		return nil, nil
+	}, mruby.ArgsReq(1))
+	kernel.DefineMethod("password", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
+		endpoint = m.GetArgs()[0].String()
 		return nil, nil
 	}, mruby.ArgsReq(1))
 	kernel.DefineMethod("object", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
@@ -91,4 +126,8 @@ func defineDSL(mrb *mruby.Mrb) {
 		})
 		return nil, nil
 	}, mruby.ArgsReq(2))
+}
+
+func debug(args ...interface{}) {
+	pp.Println(args)
 }
