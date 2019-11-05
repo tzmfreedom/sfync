@@ -1,0 +1,16 @@
+config do
+  username ENV['SFDC_USERNAME']
+  password ENV['SFDC_PASSWORD']
+end
+
+object :hoge do
+  string :aaa, a: :b
+  5.times do |i|
+    string "hoge#{i}__c", c: :d
+  end
+end
+
+object :fuga do
+  string :bbb
+  string :ccc
+end
