@@ -18,7 +18,7 @@ var currentSobjects = map[string]struct{}{}
 
 type Object struct {
 	Name       string
-	Properties []*Property
+	Properties map[string]*Property
 }
 
 type Property struct {
@@ -31,7 +31,7 @@ type Diff struct {
 	DeleteObjects []string
 	NewColumns    map[string][]*Property
 	UpdateColumns map[string][]*Property
-	DeleteColumns map[string][]*Property
+	DeleteColumns map[string][]string
 }
 
 func main() {
@@ -75,6 +75,8 @@ func apply(diff *Diff) error {
 func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (*Diff, error) {
 	newObjects := []*Object{}
 	deleteObjects := []string{}
+	newColumns := map[string][]*Property{}
+	deleteColumns := map[string][]string{}
 	for name, setting := range settings {
 		if _, ok := currentSobjects[name]; !ok {
 			newObjects = append(newObjects, setting)
@@ -84,13 +86,27 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 			if err != nil {
 				return nil, err
 			}
-			properties := make([]*Property, len(dsr.Fields))
-			for i, f := range dsr.Fields {
-				properties[i] = &Property{
+			currentProperties := map[string]*Property{}
+			for _, f := range dsr.Fields {
+				currentProperties[f.Name] = &Property{
 					Name: f.Name,
 					Type: string(*f.Type_),
 				}
 			}
+			tmpNewColumns := []*Property{}
+			tmpDeleteColumns := []string{}
+			for name, _ := range currentProperties {
+				if _, ok := setting.Properties[name]; !ok {
+					tmpDeleteColumns = append(tmpDeleteColumns, name)
+				}
+			}
+			for name, property := range setting.Properties {
+				if _, ok := currentProperties[name]; !ok {
+					tmpNewColumns = append(tmpNewColumns, property)
+				}
+			}
+			newColumns[name] = tmpNewColumns
+			deleteColumns[name] = tmpDeleteColumns
 			//objects[name] = &Object{
 			//	Name:       name,
 			//	Properties: properties,
@@ -105,6 +121,8 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 	return &Diff{
 		NewObjects:    newObjects,
 		DeleteObjects: deleteObjects,
+		NewColumns:    newColumns,
+		DeleteColumns: deleteColumns,
 	}, nil
 }
 
@@ -161,7 +179,7 @@ func defineDSL(mrb *mruby.Mrb) {
 		//	value, _ := properties.Get(key)
 		//	fmt.Printf("%s => %s\n", key.String(), value)
 		//}
-		currentObject = &Object{name, []*Property{}}
+		currentObject = &Object{name, map[string]*Property{}}
 		objects[name] = currentObject
 		mrb.Yield(args[1])
 		return nil, nil
@@ -172,10 +190,10 @@ func defineDSL(mrb *mruby.Mrb) {
 		}
 		args := m.GetArgs()
 		name := args[0].String()
-		currentObject.Properties = append(currentObject.Properties, &Property{
+		currentObject.Properties[name] = &Property{
 			Type: "string",
 			Name: name,
-		})
+		}
 		return nil, nil
 	}, mruby.ArgsReq(2))
 }
