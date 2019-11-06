@@ -50,7 +50,7 @@ func main() {
 
 func getSalesforceSchema() (map[string]struct{}, error) {
 	client = soapforce.NewClient()
-	_, err := client.Login(os.Getenv("SFDC_USERNAME"), os.Getenv("SFDC_PASSWORD"))
+	_, err := client.Login(username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +98,8 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 			for name, _ := range currentProperties {
 				if _, ok := setting.Properties[name]; !ok {
 					tmpDeleteColumns = append(tmpDeleteColumns, name)
+				} else {
+					// update columns
 				}
 			}
 			for name, property := range setting.Properties {
@@ -107,10 +109,6 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 			}
 			newColumns[name] = tmpNewColumns
 			deleteColumns[name] = tmpDeleteColumns
-			//objects[name] = &Object{
-			//	Name:       name,
-			//	Properties: properties,
-			//}
 		}
 	}
 	for name, _ := range currentSobjects {
@@ -150,21 +148,12 @@ func loadFile() {
 func defineDSL(mrb *mruby.Mrb) {
 	var currentObject *Object
 	kernel := mrb.KernelModule()
-	kernel.DefineMethod("config", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
-		args := m.GetArgs()
-		mrb.Yield(args[0])
-		return nil, nil
-	}, mruby.ArgsReq(1))
 	kernel.DefineMethod("username", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
 		username = m.GetArgs()[0].String()
 		return nil, nil
 	}, mruby.ArgsReq(1))
 	kernel.DefineMethod("password", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
 		password = m.GetArgs()[0].String()
-		return nil, nil
-	}, mruby.ArgsReq(1))
-	kernel.DefineMethod("password", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
-		endpoint = m.GetArgs()[0].String()
 		return nil, nil
 	}, mruby.ArgsReq(1))
 	kernel.DefineMethod("object", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
