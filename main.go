@@ -6,12 +6,15 @@ import (
 
 	"github.com/k0kubun/pp"
 	"github.com/mitchellh/go-mruby"
+	"github.com/tzmfreedom/go-soapforce"
 )
 
 var username string
 var password string
 var endpoint = "login.salesforce.com"
-var objects = []*Object{}
+var objects = map[string]*Object{}
+var client *soapforce.Client
+var currentSobjects = map[string]struct{}{}
 
 type Object struct {
 	Name       string
@@ -25,7 +28,7 @@ type Property struct {
 
 type Diff struct {
 	NewObjects    []*Object
-	DeleteObjects []*Object
+	DeleteObjects []string
 	NewColumns    map[string][]*Property
 	UpdateColumns map[string][]*Property
 	DeleteColumns map[string][]*Property
@@ -33,27 +36,76 @@ type Diff struct {
 
 func main() {
 	loadFile()
-	schema, err := getSalesforceSchema()
+	var err error
+	currentSobjects, err = getSalesforceSchema()
 	if err != nil {
 		panic(err)
 	}
-	diff, err := getDiff(schema, objects)
+	diff, err := getDiff(currentSobjects, objects)
 	if err != nil {
 		panic(err)
 	}
 	apply(diff)
 }
 
-func getSalesforceSchema() ([]*Object, error) {
-	return nil, nil
+func getSalesforceSchema() (map[string]struct{}, error) {
+	client = soapforce.NewClient()
+	_, err := client.Login(os.Getenv("SFDC_USERNAME"), os.Getenv("SFDC_PASSWORD"))
+	if err != nil {
+		return nil, err
+	}
+	r, err := client.DescribeGlobal()
+	if err != nil {
+		return nil, err
+	}
+	currentSobjects := map[string]struct{}{}
+	for _, sobj := range r.Sobjects {
+		if sobj.Custom {
+			currentSobjects[sobj.Name] = struct{}{}
+		}
+	}
+	return currentSobjects, nil
 }
 
 func apply(diff *Diff) error {
+	debug(diff)
 	return nil
 }
 
-func getDiff(schema []*Object, objects []*Object) (*Diff, error) {
-	return nil, nil
+func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (*Diff, error) {
+	newObjects := []*Object{}
+	deleteObjects := []string{}
+	for name, setting := range settings {
+		if _, ok := currentSobjects[name]; !ok {
+			newObjects = append(newObjects, setting)
+		} else {
+			// columns diff
+			dsr, err := client.DescribeSObject(name)
+			if err != nil {
+				return nil, err
+			}
+			properties := make([]*Property, len(dsr.Fields))
+			for i, f := range dsr.Fields {
+				properties[i] = &Property{
+					Name: f.Name,
+					Type: string(*f.Type_),
+				}
+			}
+			//objects[name] = &Object{
+			//	Name:       name,
+			//	Properties: properties,
+			//}
+		}
+	}
+	for name, _ := range currentSobjects {
+		if _, ok := settings[name]; !ok {
+			deleteObjects = append(deleteObjects, name)
+		}
+	}
+	return &Diff{
+		NewObjects:    newObjects,
+		DeleteObjects: deleteObjects,
+	}, nil
 }
 
 func loadFile() {
@@ -110,7 +162,7 @@ func defineDSL(mrb *mruby.Mrb) {
 		//	fmt.Printf("%s => %s\n", key.String(), value)
 		//}
 		currentObject = &Object{name, []*Property{}}
-		objects = append(objects, currentObject)
+		objects[name] = currentObject
 		mrb.Yield(args[1])
 		return nil, nil
 	}, mruby.ArgsReq(2))
