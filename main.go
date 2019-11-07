@@ -22,8 +22,9 @@ type Object struct {
 }
 
 type Property struct {
-	Type string
-	Name string
+	Type  string
+	Name  string
+	Extra map[string]interface{}
 }
 
 type Diff struct {
@@ -88,11 +89,17 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 			}
 			currentProperties := map[string]*Property{}
 			for _, f := range dsr.Fields {
+				extra := map[string]interface{}{}
+				if string(*f.Type_) == "string" {
+					extra["length"] = 80
+				}
 				currentProperties[f.Name] = &Property{
-					Name: f.Name,
-					Type: string(*f.Type_),
+					Name:  f.Name,
+					Type:  string(*f.Type_),
+					Extra: extra,
 				}
 			}
+			pp.Println(currentProperties)
 			tmpNewColumns := []*Property{}
 			tmpDeleteColumns := []string{}
 			for name, _ := range currentProperties {
@@ -100,6 +107,7 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 					tmpDeleteColumns = append(tmpDeleteColumns, name)
 				} else {
 					// update columns
+					// currentProp := setting.Properties[name]
 				}
 			}
 			for name, property := range setting.Properties {
@@ -161,13 +169,6 @@ func defineDSL(mrb *mruby.Mrb) {
 		name := args[0].String()
 		//properties := args[1].Hash()
 
-		//k, _ := properties.Keys()
-		//keys := k.Array()
-		//for i := 0; i < keys.Len(); i++ {
-		//	key, _ := keys.Get(i)
-		//	value, _ := properties.Get(key)
-		//	fmt.Printf("%s => %s\n", key.String(), value)
-		//}
 		currentObject = &Object{name, map[string]*Property{}}
 		objects[name] = currentObject
 		mrb.Yield(args[1])
@@ -179,9 +180,22 @@ func defineDSL(mrb *mruby.Mrb) {
 		}
 		args := m.GetArgs()
 		name := args[0].String()
+		extra := map[string]interface{}{}
+		if len(args) > 1 {
+			properties := args[1].Hash()
+			k, _ := properties.Keys()
+			keys := k.Array()
+			for i := 0; i < keys.Len(); i++ {
+				key, _ := keys.Get(i)
+				value, _ := properties.Get(key)
+				extra[key.String()] = value.String()
+			}
+		}
+
 		currentObject.Properties[name] = &Property{
-			Type: "string",
-			Name: name,
+			Type:  "string",
+			Name:  name,
+			Extra: extra,
 		}
 		return nil, nil
 	}, mruby.ArgsReq(2))
