@@ -99,15 +99,23 @@ func getDiff(currentSobjects map[string]struct{}, settings map[string]*Object) (
 					Extra: extra,
 				}
 			}
-			pp.Println(currentProperties)
 			tmpNewColumns := []*Property{}
 			tmpDeleteColumns := []string{}
-			for name, _ := range currentProperties {
+			for name, currentProperty := range currentProperties {
 				if _, ok := setting.Properties[name]; !ok {
 					tmpDeleteColumns = append(tmpDeleteColumns, name)
 				} else {
 					// update columns
-					// currentProp := setting.Properties[name]
+					settingProperty := setting.Properties[name]
+					if currentProperty.Type != settingProperty.Type {
+						continue
+					}
+					switch currentProperty.Type {
+					case "string":
+						if currentProperty.Extra["length"] != settingProperty.Extra["length"] {
+
+						}
+					}
 				}
 			}
 			for name, property := range setting.Properties {
