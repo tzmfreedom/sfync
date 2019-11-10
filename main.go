@@ -7,6 +7,7 @@ import (
 	"github.com/k0kubun/pp"
 	"github.com/mitchellh/go-mruby"
 	"github.com/tzmfreedom/go-soapforce"
+	"github.com/tzmfreedom/metaforce"
 )
 
 var username string
@@ -69,6 +70,43 @@ func getSalesforceSchema() (map[string]struct{}, error) {
 }
 
 func apply(diff *Diff) error {
+	metaClient := metaforce.NewClient("login.salesforce.com", "v47.0")
+	createMetadataList := []metaforce.MetadataInterface{}
+	for _, newObj := range diff.NewObjects {
+		createMetadataList = append(createMetadataList, &metaforce.CustomObject{
+			FullName: newObj.Name,
+			Type: "CustomObject",
+			Description: "",
+			NameField: &metaforce.CustomField{
+				Label:  "Name",
+				Length: 80,
+				Type:   metaforce.FieldTypeText,
+			},
+		})
+	}
+	r, err := metaClient.CreateMetadata(createMetadataList)
+	if err != nil {
+		panic(err)
+	}
+	debug(r)
+
+	newFields := []metaforce.MetadataInterface{}
+	for _, newObj := range diff.NewObjects {
+		for _, prop := range newObj.Properties {
+			newFields = append(newFields, &metaforce.CustomField{
+				Label: prop.Name,
+				ExternalDeveloperName: prop.Name,
+				Type: metaforce.FieldType(prop.Type),
+				Description: "",
+			})
+		}
+	}
+	r, err = metaClient.CreateMetadata(createMetadataList)
+	if err != nil {
+		panic(err)
+	}
+	debug(r)
+
 	debug(diff)
 	return nil
 }

@@ -1,6 +1,9 @@
-config do
-  username ENV['SFDC_USERNAME']
-  password ENV['SFDC_PASSWORD']
+username ENV['SFDC_USERNAME']
+password ENV['SFDC_PASSWORD']
+
+object :GAS__c do
+  string :Name
+  string :NewColumn__c
 end
 
 object :hoge do

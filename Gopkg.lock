@@ -43,6 +43,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:43cd1d0f2deae2059bafe35403268373ebdf01b3076a528ede8aa9858c2cb61a"
+  name = "github.com/tzmfreedom/metaforce"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "7d3610a9182d0d2cea1d1a0ee79ecd83af7307c4"
+
+[[projects]]
+  branch = "master"
   digest = "1:999c8e6b10ddb08bc4ea3a56d4e838194c4884eac6ecf90a9aa98ed8475fdf37"
   name = "golang.org/x/sys"
   packages = ["unix"]
@@ -56,6 +64,7 @@
     "github.com/k0kubun/pp",
     "github.com/mitchellh/go-mruby",
     "github.com/tzmfreedom/go-soapforce",
+    "github.com/tzmfreedom/metaforce",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
