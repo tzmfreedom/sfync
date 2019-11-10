@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -15,6 +16,7 @@ var password string
 var endpoint = "login.salesforce.com"
 var objects = map[string]*Object{}
 var client *soapforce.Client
+var currentObject *Object
 var currentSobjects = map[string]struct{}{}
 
 type Object struct {
@@ -47,6 +49,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	//pp.Println(diff)
 	apply(diff)
 }
 
@@ -70,42 +73,72 @@ func getSalesforceSchema() (map[string]struct{}, error) {
 }
 
 func apply(diff *Diff) error {
-	metaClient := metaforce.NewClient("login.salesforce.com", "v47.0")
+	metaClient := metaforce.NewClient()
+	metaClient.SetDebug(true)
+	err := metaClient.Login(username, password)
+	if err != nil {
+		panic(err)
+	}
 	createMetadataList := []metaforce.MetadataInterface{}
 	for _, newObj := range diff.NewObjects {
+		customFields := make([]*metaforce.CustomField, len(newObj.Properties))
+		i := 0
+		for _, prop := range newObj.Properties {
+			customFields[i] = &metaforce.CustomField{
+				FullName:    prop.Name,
+				Label:       prop.Name,
+				Type:        metaforce.FieldType(prop.Type),
+				Description: "",
+				Length:      255,
+			}
+			i++
+		}
 		createMetadataList = append(createMetadataList, &metaforce.CustomObject{
-			FullName: newObj.Name,
-			Type: "CustomObject",
-			Description: "",
+			FullName:         newObj.Name,
+			Label:            newObj.Name,
+			DeploymentStatus: metaforce.DeploymentStatusDeployed,
+			Type:             "CustomObject",
+			Description:      "",
 			NameField: &metaforce.CustomField{
 				Label:  "Name",
 				Length: 80,
 				Type:   metaforce.FieldTypeText,
 			},
+			SharingModel: metaforce.SharingModelReadWrite,
+			Fields:       customFields,
 		})
 	}
-	r, err := metaClient.CreateMetadata(createMetadataList)
-	if err != nil {
-		panic(err)
-	}
-	debug(r)
-
-	newFields := []metaforce.MetadataInterface{}
-	for _, newObj := range diff.NewObjects {
-		for _, prop := range newObj.Properties {
-			newFields = append(newFields, &metaforce.CustomField{
-				Label: prop.Name,
-				ExternalDeveloperName: prop.Name,
-				Type: metaforce.FieldType(prop.Type),
-				Description: "",
-			})
+	debug(createMetadataList)
+	if len(createMetadataList) > 0 {
+		r, err := metaClient.CreateMetadata(createMetadataList)
+		if err != nil {
+			panic(err)
 		}
+		debug(r)
 	}
-	r, err = metaClient.CreateMetadata(createMetadataList)
-	if err != nil {
-		panic(err)
+
+	customFields := make([]*metaforce.CustomField, len(diff.NewColumns))
+	for objectName, columns := range diff.NewColumns {
+		for i, column := range columns {
+			customFields[i] = &metaforce.CustomField{
+				FullName:    fmt.Sprintf("%s.%s", objectName, column.Name),
+				Label:       column.Name,
+				Type:        metaforce.FieldType(column.Type),
+				Description: "",
+			}
+		}
+		r, err := metaClient.CreateMetadata(createMetadataList)
+		if err != nil {
+			panic(err)
+		}
+		debug(r)
 	}
-	debug(r)
+
+	//r, err = metaClient.CreateMetadata(newFields)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//debug(r)
 
 	debug(diff)
 	return nil
@@ -200,7 +233,6 @@ func loadFile() {
 }
 
 func defineDSL(mrb *mruby.Mrb) {
-	var currentObject *Object
 	kernel := mrb.KernelModule()
 	kernel.DefineMethod("username", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
 		username = m.GetArgs()[0].String()
@@ -220,31 +252,55 @@ func defineDSL(mrb *mruby.Mrb) {
 		mrb.Yield(args[1])
 		return nil, nil
 	}, mruby.ArgsReq(2))
-	kernel.DefineMethod("string", func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
+	kernel.DefineMethod("text", createFieldProc(metaforce.FieldTypeText), mruby.ArgsReq(2))
+	kernel.DefineMethod("number", createFieldProc(metaforce.FieldTypeNumber), mruby.ArgsReq(2))
+	kernel.DefineMethod("date", createFieldProc(metaforce.FieldTypeDate), mruby.ArgsReq(2))
+	kernel.DefineMethod("auto_number", createFieldProc(metaforce.FieldTypeAutoNumber), mruby.ArgsReq(2))
+	kernel.DefineMethod("checkbox", createFieldProc(metaforce.FieldTypeCheckbox), mruby.ArgsReq(2))
+	kernel.DefineMethod("currency", createFieldProc(metaforce.FieldTypeCurrency), mruby.ArgsReq(2))
+	kernel.DefineMethod("date_time", createFieldProc(metaforce.FieldTypeDateTime), mruby.ArgsReq(2))
+	kernel.DefineMethod("email", createFieldProc(metaforce.FieldTypeEmail), mruby.ArgsReq(2))
+	kernel.DefineMethod("url", createFieldProc(metaforce.FieldTypeUrl), mruby.ArgsReq(2))
+	kernel.DefineMethod("lookup", createFieldProc(metaforce.FieldTypeLookup), mruby.ArgsReq(2))
+	kernel.DefineMethod("url", createFieldProc(metaforce.FieldTypeLongTextArea), mruby.ArgsReq(2))
+	kernel.DefineMethod("long_text_area", createFieldProc(metaforce.FieldTypeHtml), mruby.ArgsReq(2))
+	kernel.DefineMethod("percent", createFieldProc(metaforce.FieldTypePercent), mruby.ArgsReq(2))
+	kernel.DefineMethod("picklist", createFieldProc(metaforce.FieldTypePicklist), mruby.ArgsReq(2))
+	kernel.DefineMethod("multiselect_picklist", createFieldProc(metaforce.FieldTypeMultiselectPicklist), mruby.ArgsReq(2))
+	kernel.DefineMethod("phone", createFieldProc(metaforce.FieldTypePhone), mruby.ArgsReq(2))
+	kernel.DefineMethod("summary", createFieldProc(metaforce.FieldTypeSummary), mruby.ArgsReq(2))
+}
+
+func createFieldProc(fieldType metaforce.FieldType) func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
+	return func(m *mruby.Mrb, self *mruby.MrbValue) (mruby.Value, mruby.Value) {
 		if currentObject == nil {
 			panic("No target object")
 		}
 		args := m.GetArgs()
 		name := args[0].String()
-		extra := map[string]interface{}{}
-		if len(args) > 1 {
-			properties := args[1].Hash()
-			k, _ := properties.Keys()
-			keys := k.Array()
-			for i := 0; i < keys.Len(); i++ {
-				key, _ := keys.Get(i)
-				value, _ := properties.Get(key)
-				extra[key.String()] = value.String()
-			}
-		}
-
+		extra := getExtra(args)
 		currentObject.Properties[name] = &Property{
-			Type:  "string",
+			Type:  string(fieldType),
 			Name:  name,
 			Extra: extra,
 		}
 		return nil, nil
-	}, mruby.ArgsReq(2))
+	}
+}
+
+func getExtra(args []*mruby.MrbValue) map[string]interface{} {
+	extra := map[string]interface{}{}
+	if len(args) > 1 {
+		properties := args[1].Hash()
+		k, _ := properties.Keys()
+		keys := k.Array()
+		for i := 0; i < keys.Len(); i++ {
+			key, _ := keys.Get(i)
+			value, _ := properties.Get(key)
+			extra[key.String()] = value.String()
+		}
+	}
+	return extra
 }
 
 func debug(args ...interface{}) {
